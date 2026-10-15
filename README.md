@@ -4,7 +4,7 @@ AIFAGen Admin Portal is an internal dashboard prototype for managing and monitor
 
 Live Demo: https://aifagen-admin-portal.vercel.app/
 
-> **Note:** This is a frontend prototype. It uses local sample data to demonstrate the interface and workflows. The Copilot does not connect to an external AI service, and actions are not connected to a production backend.
+> **Note:** This is an admin prototype using local sample data. Copilot can call Groq through a local server-side API when configured. The dashboard's account and operations workflows are not connected to a production backend.
 
 ## Features
 
@@ -34,21 +34,22 @@ Live Demo: https://aifagen-admin-portal.vercel.app/
 
 ### AIFAGen Copilot
 - Open the Copilot panel from the interface.
-- Use suggested prompts or enter a question about the sample platform data.
-- Explore example responses for platform summaries, revenue changes, inactive Premium users, and items needing attention.
-- The Copilot is a local demo experience; it does not call an external LLM or retrieve live platform data.
+- Use suggested prompts or ask follow-up questions about the current workspace data.
+- Copilot uses Groq chat completions and receives a compact, anonymized operational context. User names, emails, and phone numbers are excluded.
+- Job hide requests keep a separate review and confirmation flow; the assistant cannot execute changes itself.
+- The context comes from local prototype records and illustrative estimates, not a production database.
 
 ## How It Works
 
-The application is a client-side React interface built with Vite.
+The application is a React interface built with Vite, with a small local Node API that proxies Copilot requests to Groq. The API key stays on the server and is never sent to browser code.
 
 1. The app renders a shared admin layout with grouped sidebar navigation.
 2. Selecting a navigation item opens the corresponding section.
 3. Pages display sample records and illustrative metrics.
 4. Charts, status indicators, filters, panels, and dialogs provide a demonstration of common admin workflows.
-5. The Copilot responds using local demo logic and sample data rather than a connected AI service.
+5. The Copilot sends the recent conversation and a redacted summary of current workspace state to the local API. The API sends it to Groq and returns the response.
 
-Because no production backend is connected, the metrics should be treated as illustrative, not as real business or financial information. Changes made in the interface may not persist after a refresh.
+Metrics should be treated as illustrative, not as verified business or financial information. Supported edits persist in the current browser's `localStorage`; they are not shared across users or devices.
 
 ## Technology Stack
 
@@ -64,7 +65,7 @@ The `package.json` file defines the exact dependencies and available scripts.
 
 ### Prerequisites
 
-Install Node.js (use a version supported by the project's Vite version) and npm.
+Install Node.js 20.19+ or 22.12+ and npm.
 
 Check your installation:
 
@@ -92,7 +93,25 @@ npm install
 
 If the project has a valid `package-lock.json`, you can use `npm ci` for a clean, reproducible install.
 
-### 3. Start the development server
+### 3. Configure the Groq API key
+
+Create a local environment file from the example:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Edit `.env.local` and set `GROQ_API_KEY` to a newly generated or rotated Groq key. Keep this file private; it is ignored by Git. `GROQ_MODEL` is optional and defaults to `openai/gpt-oss-120b`.
+
+### 4. Start the local API and frontend
+
+Open two terminals in the `frontend` directory. Start the API in the first terminal:
+
+```bash
+npm run api
+```
+
+Start Vite in the second terminal:
 
 ```bash
 npm run dev
@@ -104,9 +123,9 @@ Open the local URL printed in the terminal. It is commonly:
 http://localhost:5173/
 ```
 
-Keep the terminal open while developing.
+Keep both terminals open while developing. Vite forwards `/api` requests to the local API server.
 
-### 4. Build the app
+### 5. Build the app
 
 ```bash
 npm run build
@@ -114,7 +133,7 @@ npm run build
 
 Vite creates the production frontend build in the `dist` directory.
 
-### 5. Preview the build locally
+### 6. Preview the build locally
 
 ```bash
 npm run preview
@@ -127,6 +146,7 @@ Use the URL printed by Vite to inspect the built frontend.
 | Command | Description |
 | --- | --- |
 | `npm run dev` | Start the local development server |
+| `npm run api` | Start the local Groq proxy on `127.0.0.1:8787` |
 | `npm run build` | Build the frontend for deployment |
 | `npm run preview` | Preview the production build locally |
 | `npm run lint` | Run lint checks, if this script is defined in `package.json` |
@@ -152,15 +172,21 @@ frontend/
 └── vite.config.js
 ```
 
+The local Copilot service and environment template are also part of the project:
+
+- `server/index.mjs` — loopback-only Node API proxy to Groq.
+- `.env.example` — placeholder configuration; copy it to `.env.local` and add a rotated key.
+
 ## Current Limitations
 
 - No production authentication or server-side admin authorization.
 - No connected database or persistent backend.
 - No live payment gateway or real refund processing.
 - No live job-source collection or retry service.
-- No external AI-provider connection; Copilot uses local demo logic.
+- The local Groq proxy is for development only and binds to `127.0.0.1`; it has no user authentication. Do not expose it publicly.
+- A production Copilot deployment needs an authenticated server-side endpoint and a securely managed `GROQ_API_KEY`; Vite's static build does not include the API server.
 - Dashboard and analytics figures are sample estimates.
-- Some actions may be demonstrative and may not persist across page reloads.
+- User and payment workflows remain local prototype behavior and do not connect to production services.
 
 A production deployment would require a secured backend, access control, persistent data storage, server-side validation, audited operations, and integrations for payments, AI processing, and job collection.
 

@@ -5477,6 +5477,8 @@ td code {
 .copilot-heading > strong { color: var(--text); font-size: 14px; letter-spacing: -.2px; }
 .copilot-heading > span { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 10px; }
 .copilot-heading > span i { width: 7px; height: 7px; border-radius: 50%; background: #e4a23a; box-shadow: 0 0 0 3px rgba(228, 162, 58, .12); }
+.copilot-heading > span i.connected { background: #24ad7b; box-shadow: 0 0 0 3px rgba(36, 173, 123, .14); }
+.copilot-heading > span i.offline { background: #e46c78; box-shadow: 0 0 0 3px rgba(228, 108, 120, .14); }
 .copilot-close { width: 34px; height: 34px; display: grid; place-items: center; margin-left: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-2); }
 .copilot-close:hover { background: var(--primary-soft); color: var(--primary); }
 .copilot-messages { min-height: 0; flex: 1; overflow-y: auto; padding: 16px; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--primary) 32%, var(--border)) transparent; }

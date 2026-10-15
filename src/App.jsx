@@ -1291,6 +1291,8 @@ export default function App() {
         sources={sources}
         sourceRuns={sourceRuns}
         aiTasks={aiTasks}
+        internalJobs={internalJobs}
+        auditLogs={auditLogs}
         setPage={setPage}
         setModal={setModal}
         setSidePanel={setSidePanel}
@@ -6564,6 +6566,95 @@ function ModalShell({
   );
 }
 
+function buildCopilotContext({ page, users, payments, jobs, internalJobs, sources, sourceRuns, aiTasks, auditLogs }) {
+  const countBy = (records, getKey) => records.reduce((counts, record) => {
+    const key = getKey(record) || "Unknown";
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+  const moneyByStatus = payments.reduce((totals, payment) => {
+    const status = payment.status || "Unknown";
+    totals[status] = (totals[status] || 0) + Number(payment.amount || 0);
+    return totals;
+  }, {});
+
+  return {
+    page,
+    dataNote: "These are local prototype records and illustrative estimates, not live production totals.",
+    users: {
+      total: users.length,
+      byStatus: countBy(users, (user) => user.status),
+      byPlan: countBy(users, (user) => user.plan),
+      aiCallsTotal: users.reduce((sum, user) => sum + (Number(user.ai) || 0), 0),
+      includedAccounts: Math.min(users.length, 100),
+      anonymizedAccounts: users.slice(0, 100).map((user, index) => ({
+        account: `Account ${index + 1}`,
+        plan: user.plan,
+        status: user.status,
+        aiCalls: Number(user.ai) || 0,
+        inactiveDays: daysSinceLastActive(user),
+      })),
+    },
+    payments: {
+      total: payments.length,
+      byStatus: countBy(payments, (payment) => payment.status),
+      grossAmountByStatus: moneyByStatus,
+      totalRefunded: payments.reduce((sum, payment) => sum + Number(payment.refundedAmount || (payment.status === "Refunded" ? payment.amount : 0)), 0),
+    },
+    jobs: {
+      total: jobs.length,
+      visible: jobs.filter((job) => job.visible).length,
+      hidden: jobs.filter((job) => !job.visible).length,
+      bySource: countBy(jobs, (job) => job.source),
+      includedListings: Math.min(jobs.length, 100),
+      listings: jobs.slice(0, 100).map((job) => ({
+        title: job.title,
+        company: job.company,
+        source: job.source,
+        status: job.status,
+        visible: Boolean(job.visible),
+      })),
+    },
+    internalJobs: {
+      total: internalJobs.length,
+      byStatus: countBy(internalJobs, (job) => job.status || (job.visible ? "Published" : "Hidden")),
+    },
+    jobSources: {
+      total: sources.length,
+      byStatus: countBy(sources, (source) => source.status),
+      recentRunsByStatus: countBy(sourceRuns.slice(0, 100), (run) => run.status),
+    },
+    aiTasks: {
+      total: aiTasks.length,
+      byStatus: countBy(aiTasks, (task) => task.status),
+      byType: countBy(aiTasks, (task) => task.type),
+      estimatedCost: aiTasks.reduce((sum, task) => sum + (Number(task.cost) || 0), 0),
+    },
+    aiUsageEstimates: {
+      calls: 48420,
+      estimatedCost: 18420,
+      successRatePercent: 98.7,
+      averageLatencySeconds: 2.4,
+      providers: [
+        { name: "OpenAI", calls: 27100, estimatedCost: 9200, successRatePercent: 99.1, averageLatencySeconds: 1.8 },
+        { name: "Gemini", calls: 14000, estimatedCost: 5400, successRatePercent: 98.4, averageLatencySeconds: 2.1 },
+        { name: "HuggingFace", calls: 7300, estimatedCost: 3800, successRatePercent: 97.9, averageLatencySeconds: 3.4 },
+      ],
+      features: featureAdoption.map(({ feature, users: featureUsers, costPerUse, monthlyChange }) => ({
+        feature,
+        users: featureUsers,
+        estimatedCost: featureUsers * costPerUse,
+        estimatedCostPerUse: costPerUse,
+        monthlyChangePercent: monthlyChange,
+      })),
+    },
+    recentAdminActivity: auditLogs.slice(0, 12).map((entry) => ({
+      when: entry.when,
+      action: entry.action,
+    })),
+  };
+}
+
 function AdminCopilot({
   open,
   setOpen,
@@ -6575,6 +6666,8 @@ function AdminCopilot({
   sources,
   sourceRuns,
   aiTasks,
+  internalJobs,
+  auditLogs,
   setPage,
   setModal,
   setSidePanel,
@@ -6584,6 +6677,21 @@ function AdminCopilot({
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
+  const [apiStatus, setApiStatus] = useState("checking");
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let active = true;
+    fetch("/api/health")
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("API unavailable")))
+      .then((result) => {
+        if (active) setApiStatus(result.ready ? "ready" : "setup");
+      })
+      .catch(() => {
+        if (active) setApiStatus("offline");
+      });
+    return () => { active = false; };
+  }, [open]);
   const suggestions = [
     { icon: BarChart3, text: "Give me today's platform summary" },
     { icon: IndianRupee, text: "Why did revenue change this month?" },
@@ -6733,17 +6841,59 @@ function AdminCopilot({
   function submitQuestion(question = draft) {
     const text = question.trim();
     if (!text || typing) return;
-    setMessages((current) => [...current, { id: `${Date.now()}-user`, role: "user", text }]);
+    const messageIndex = messages.length;
+    const userMessage = { id: `${messageIndex}-user`, role: "user", text };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
     setDraft("");
     setTyping(true);
-    window.setTimeout(() => {
-      setMessages((current) => [...current, {
-        id: `${Date.now()}-assistant`,
-        role: "assistant",
-        ...makeResponse(text),
-      }]);
-      setTyping(false);
-    }, 280);
+
+    const normalizedText = text.toLowerCase();
+    const asksToHideJobs = /hide|remove|unpublish/.test(normalizedText) &&
+      /job/.test(normalizedText) && /source|failed|problem/.test(normalizedText);
+    if (asksToHideJobs) {
+      window.setTimeout(() => {
+        setMessages((current) => [...current, {
+          id: `${messageIndex + 1}-assistant`,
+          role: "assistant",
+          ...makeResponse(text),
+        }]);
+        setTyping(false);
+      }, 280);
+      return;
+    }
+
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page,
+        messages: nextMessages.slice(-12).map(({ role, text: content }) => ({ role, content })),
+        context: buildCopilotContext({ users, payments, jobs, internalJobs, sources, sourceRuns, aiTasks, auditLogs }),
+      }),
+    })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "The assistant is unavailable right now.");
+        return result;
+      })
+      .then((result) => {
+        setApiStatus("ready");
+        setMessages((current) => [...current, {
+          id: `${messageIndex + 1}-assistant`,
+          role: "assistant",
+          text: result.reply || "I couldn't form a response. Try asking in another way.",
+        }]);
+      })
+      .catch((error) => {
+        setMessages((current) => [...current, {
+          id: `${messageIndex + 1}-assistant-error`,
+          role: "assistant",
+          text: error.message || "I couldn't connect to the assistant. Check the local API server and try again.",
+        }]);
+        setApiStatus(error.message?.includes("GROQ_API_KEY") ? "setup" : "offline");
+      })
+      .finally(() => setTyping(false));
   }
 
   function executeAction(action) {
@@ -6829,7 +6979,7 @@ function AdminCopilot({
             <div className="copilot-brand-icon"><Sparkles size={19} aria-hidden="true" /></div>
             <div className="copilot-heading">
               <strong id="copilot-title">AIFAGen Copilot</strong>
-              <span><i /> Prototype · using local sample data</span>
+              <span><i className={apiStatus === "ready" ? "connected" : apiStatus === "offline" ? "offline" : ""} />{apiStatus === "ready" ? "Groq assistant · workspace context" : apiStatus === "checking" ? "Connecting to assistant…" : apiStatus === "setup" ? "Add GROQ_API_KEY to connect" : "Assistant API unavailable"}</span>
             </div>
             <button type="button" className="copilot-close" aria-label="Close AIFAGen Copilot" onClick={() => setOpen(false)}><X size={18} aria-hidden="true" /></button>
           </header>
@@ -6839,7 +6989,7 @@ function AdminCopilot({
               <div className="copilot-welcome">
                 <span className="copilot-welcome-icon"><Sparkles size={21} aria-hidden="true" /></span>
                 <h2>What would you like to know?</h2>
-                <p>Ask about {page === "Dashboard" ? "your platform" : page.toLowerCase()} or choose a suggestion.</p>
+                <p>Hi there! Ask me about {page === "Dashboard" ? "your platform" : page.toLowerCase()}, or choose a prompt to get started.</p>
                 <div className="copilot-suggestions">
                   {promptList.map((prompt, index) => {
                     const IconComponent = suggestions[index % suggestions.length].icon;
@@ -6868,19 +7018,19 @@ function AdminCopilot({
                 </div>
               </article>
             ))}
-            {typing && <div className="copilot-typing"><i /><i /><i /><span>Analyzing sample data…</span></div>}
+            {typing && <div className="copilot-typing"><i /><i /><i /><span>Thinking through the workspace data…</span></div>}
           </div>
 
           <form className="copilot-composer" onSubmit={(event) => { event.preventDefault(); submitQuestion(); }}>
             <input
               aria-label="Ask AIFAGen Copilot"
-              placeholder={`Ask about ${page.toLowerCase()}…`}
+              placeholder={`Ask anything about ${page.toLowerCase()}…`}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
             />
             <button type="submit" disabled={!draft.trim() || typing} aria-label="Send message"><Send size={17} aria-hidden="true" /></button>
           </form>
-          <p className="copilot-disclaimer">Answers are generated from local demo data · no external AI service connected</p>
+          <p className="copilot-disclaimer">Workspace summaries sent to Groq omit contact details. Avoid entering personal information.</p>
         </section>
       )}
       <button
