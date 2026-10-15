@@ -119,6 +119,19 @@ http://localhost:5173/
 
 The `dev` command starts the local Groq proxy and Vite together. Keep the terminal open while developing. Vite forwards `/api` requests to the local API server. If you only need the frontend, use `npm run dev:web`; run `npm run api` separately alongside it when you need Copilot.
 
+### Deploy to Vercel
+
+The `api/health.js` and `api/chat.js` files are Vercel Node.js functions for the existing `/api/health` and `/api/chat` frontend requests. They share the same Groq request and conversation logic as the local API. No `vercel.json` is needed; Vercel detects functions in the root `api/` directory automatically.
+
+In the Vercel project settings, configure:
+
+1. **Root Directory:** the `frontend` folder containing this README and `package.json` (if the repository contains the frontend in a subfolder).
+2. **Build Command:** `npm run build`.
+3. **Output Directory:** `dist` (or let the Vite framework preset detect it).
+4. **Environment Variables:** set `GROQ_API_KEY` to a valid key for Production, and also Preview/Development if those environments need Copilot.
+
+Redeploy after adding or changing the environment variable. Keep the key in Vercel's server-side environment settings; do not add it to frontend variables such as `VITE_*`, source files, or committed environment files. `GROQ_MODEL` can optionally select another supported model; the default is `openai/gpt-oss-120b`.
+
 ### 5. Build the app
 
 ```bash
@@ -153,6 +166,8 @@ The main parts of the frontend are typically organized as follows. Refer to the 
 ```text
 frontend/
 ├── public/       # Public static assets
+├── api/          # Vercel Copilot serverless routes
+├── server/       # Local API runner and shared Groq handler
 ├── src/
 │   ├── assets/   # Images and other imported assets
 │   ├── components/ # Shared layout and UI components
@@ -171,6 +186,8 @@ The local Copilot service and environment template are also part of the project:
 
 - `server/dev.mjs` — starts Vite and the local API together.
 - `server/index.mjs` — loopback-only Node API proxy to Groq.
+- `server/copilot-api.mjs` — shared request handling for local and Vercel routes.
+- `api/health.js` and `api/chat.js` — Vercel serverless endpoints.
 - `.env.example` — placeholder configuration; copy it to `.env.local` and add a rotated key.
 
 ## Current Limitations
@@ -180,7 +197,7 @@ The local Copilot service and environment template are also part of the project:
 - No live payment gateway or real refund processing.
 - No live job-source collection or retry service.
 - The local Groq proxy is for development only and binds to `127.0.0.1`; it has no user authentication. Do not expose it publicly.
-- A production Copilot deployment needs an authenticated server-side endpoint and a securely managed `GROQ_API_KEY`; Vite's static build does not include the API server.
+- The Vercel Copilot functions keep the Groq key server-side, but this admin prototype does not authenticate or authorize requests. Restrict access to the deployment before using it with sensitive data.
 - Dashboard and analytics figures are sample estimates.
 - User and payment workflows remain local prototype behavior and do not connect to production services.
 
