@@ -2,6 +2,8 @@
 
 AIFAGen Admin Portal is an internal dashboard prototype for managing and monitoring the AIFAGen platform. It brings user administration, revenue and subscriptions, job listings, job-source health, AI performance, analytics, and administrative activity into one interface.
 
+Live Demo: https://aifagen-admin-portal.vercel.app/
+
 > **Note:** This is a frontend prototype. It uses local sample data to demonstrate the interface and workflows. The Copilot does not connect to an external AI service, and actions are not connected to a production backend.
 
 ## Features
