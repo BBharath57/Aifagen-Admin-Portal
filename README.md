@@ -105,13 +105,7 @@ Edit `.env.local` and set `GROQ_API_KEY` to a newly generated or rotated Groq ke
 
 ### 4. Start the local API and frontend
 
-Open two terminals in the `frontend` directory. Start the API in the first terminal:
-
-```bash
-npm run api
-```
-
-Start Vite in the second terminal:
+Start both the local API and Vite together from one terminal:
 
 ```bash
 npm run dev
@@ -123,7 +117,7 @@ Open the local URL printed in the terminal. It is commonly:
 http://localhost:5173/
 ```
 
-Keep both terminals open while developing. Vite forwards `/api` requests to the local API server.
+The `dev` command starts the local Groq proxy and Vite together. Keep the terminal open while developing. Vite forwards `/api` requests to the local API server. If you only need the frontend, use `npm run dev:web`; run `npm run api` separately alongside it when you need Copilot.
 
 ### 5. Build the app
 
@@ -145,7 +139,8 @@ Use the URL printed by Vite to inspect the built frontend.
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Start the local development server |
+| `npm run dev` | Start the frontend and local Groq proxy together |
+| `npm run dev:web` | Start only the Vite frontend |
 | `npm run api` | Start the local Groq proxy on `127.0.0.1:8787` |
 | `npm run build` | Build the frontend for deployment |
 | `npm run preview` | Preview the production build locally |
@@ -174,6 +169,7 @@ frontend/
 
 The local Copilot service and environment template are also part of the project:
 
+- `server/dev.mjs` — starts Vite and the local API together.
 - `server/index.mjs` — loopback-only Node API proxy to Groq.
 - `.env.example` — placeholder configuration; copy it to `.env.local` and add a rotated key.
 
