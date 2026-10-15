@@ -6682,7 +6682,7 @@ function AdminCopilot({
   useEffect(() => {
     if (!open) return undefined;
     let active = true;
-    fetch("/api/health")
+    const checkApi = () => fetch("/api/health")
       .then((response) => response.ok ? response.json() : Promise.reject(new Error("API unavailable")))
       .then((result) => {
         if (active) setApiStatus(result.ready ? "ready" : "setup");
@@ -6690,7 +6690,12 @@ function AdminCopilot({
       .catch(() => {
         if (active) setApiStatus("offline");
       });
-    return () => { active = false; };
+    checkApi();
+    const healthInterval = window.setInterval(checkApi, 10000);
+    return () => {
+      active = false;
+      window.clearInterval(healthInterval);
+    };
   }, [open]);
   const suggestions = [
     { icon: BarChart3, text: "Give me today's platform summary" },
@@ -6886,10 +6891,13 @@ function AdminCopilot({
         }]);
       })
       .catch((error) => {
+        const detail = error instanceof TypeError
+          ? "Copilot API is offline. Stop any old dev server, then restart with npm run dev from the frontend folder."
+          : error.message || "I couldn't connect to the assistant. Check the local API server and try again.";
         setMessages((current) => [...current, {
           id: `${messageIndex + 1}-assistant-error`,
           role: "assistant",
-          text: error.message || "I couldn't connect to the assistant. Check the local API server and try again.",
+          text: detail,
         }]);
         setApiStatus(error.message?.includes("GROQ_API_KEY") ? "setup" : "offline");
       })
@@ -6979,7 +6987,7 @@ function AdminCopilot({
             <div className="copilot-brand-icon"><Sparkles size={19} aria-hidden="true" /></div>
             <div className="copilot-heading">
               <strong id="copilot-title">AIFAGen Copilot</strong>
-              <span><i className={apiStatus === "ready" ? "connected" : apiStatus === "offline" ? "offline" : ""} />{apiStatus === "ready" ? "Groq assistant · workspace context" : apiStatus === "checking" ? "Connecting to assistant…" : apiStatus === "setup" ? "Add GROQ_API_KEY to connect" : "Assistant API unavailable"}</span>
+              <span><i className={apiStatus === "ready" ? "connected" : apiStatus === "offline" ? "offline" : ""} />{apiStatus === "ready" ? "Groq assistant · workspace context" : apiStatus === "checking" ? "Connecting to assistant…" : apiStatus === "setup" ? "Set GROQ_API_KEY in .env.local" : "API offline · restart npm run dev"}</span>
             </div>
             <button type="button" className="copilot-close" aria-label="Close AIFAGen Copilot" onClick={() => setOpen(false)}><X size={18} aria-hidden="true" /></button>
           </header>

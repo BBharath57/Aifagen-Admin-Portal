@@ -191,6 +191,11 @@ A production deployment would require a secured backend, access control, persist
 **The page does not open**
 - Make sure `npm run dev` is still running.
 - Open the exact local URL printed in the terminal.
+- Stop any older Vite terminal with Ctrl+C before restarting. Vite now requires port 5173 so the page cannot silently open an old frontend without the Copilot API.
+
+**Copilot says the API is offline**
+- Stop the running development server with Ctrl+C, then run `npm run dev` from the `frontend` directory and open `http://localhost:5173/`.
+- If the header says `Set GROQ_API_KEY in .env.local`, add a valid key to `.env.local` and restart the dev server. The Copilot panel checks the API status every 10 seconds.
 
 **The browser shows a blank page**
 - Check the terminal for build errors.
